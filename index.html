@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Customer Service Chat</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">
+        <h1>AI Customer Support</h1>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>AI Assistant Online</span>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="message bot-message">
+          <div class="message-content">
+            Hello! I'm your AI customer service assistant. I can help you with
+            orders, returns, technical support, and general inquiries. How can I
+            assist you today?
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input">
+        <div class="quick-actions" id="quickActions">
+          <div
+            class="quick-action"
+            onclick="sendQuickMessage('Track my order')"
+          >
+            📦 Track Order
+          </div>
+          <div class="quick-action" onclick="sendQuickMessage('Return policy')">
+            ↩️ Returns
+          </div>
+          <div
+            class="quick-action"
+            onclick="sendQuickMessage('Technical support')"
+          >
+            🔧 Tech Support
+          </div>
+          <div
+            class="quick-action"
+            onclick="sendQuickMessage('Billing question')"
+          >
+            💳 Billing
+          </div>
+        </div>
+        <div class="input-container">
+          <input
+            type="text"
+            class="input-field"
+            id="messageInput"
+            placeholder="Type your message..."
+            maxlength="500"
+          />
+          <button class="send-button" id="sendButton" onclick="sendMessage()">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22,2 15,22 11,13 2,9"></polygon>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="typing-indicator" id="typingIndicator">
+        <div class="typing-dots">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="js/config.js"></script>
+    <script src="js/chatbot.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
