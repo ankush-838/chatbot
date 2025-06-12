@@ -12,6 +12,7 @@ class InfluencerNegotiationBot {
       proposedPrice: null,
       counterOfferCount: 0,
       negotiationStage: "initial", // initial, discussing, negotiating, finalizing
+      conversationStage: "greeting", // greeting, platform_selected, followers_asked, engagement_asked, pricing
       influencerName: null,
       agreedTerms: [],
       // Influencer metrics
@@ -24,6 +25,23 @@ class InfluencerNegotiationBot {
     this.intents = this.initializeIntents();
     this.responses = this.initializeResponses();
     this.isProcessing = false;
+
+    // Google Gemini API configuration
+    this.geminiConfig =
+      typeof GEMINI_CONFIG !== "undefined"
+        ? GEMINI_CONFIG
+        : {
+            apiKey: "YOUR_GEMINI_API_KEY",
+            apiUrl:
+              "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+            enabled: false,
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 512,
+            },
+          };
 
     // Pricing structure based on knowledge.txt - all prices in Rupees
     this.pricingTiers = {
@@ -105,6 +123,9 @@ class InfluencerNegotiationBot {
     };
 
     this.initializeEventListeners();
+
+    // Initialize quick actions
+    setTimeout(() => this.updateQuickActions(), 100);
   }
 
   /**
@@ -581,6 +602,218 @@ class InfluencerNegotiationBot {
   }
 
   /**
+   * Generate response using Google Gemini API
+   */
+  async generateGeminiResponse(userMessage, intent, context) {
+    console.log("🔍 Checking Gemini configuration...");
+    console.log("Enabled:", this.geminiConfig.enabled);
+    console.log(
+      "API Key present:",
+      this.geminiConfig.apiKey &&
+        this.geminiConfig.apiKey !== "YOUR_GEMINI_API_KEY"
+    );
+
+    if (
+      !this.geminiConfig.enabled ||
+      !this.geminiConfig.apiKey ||
+      this.geminiConfig.apiKey === "YOUR_GEMINI_API_KEY"
+    ) {
+      console.log(
+        "❌ Gemini not configured properly, falling back to static responses"
+      );
+      return null; // Fall back to static responses
+    }
+
+    try {
+      // Create context for Gemini
+      const systemPrompt = this.createSystemPrompt();
+      const contextInfo = this.createContextInfo();
+      const pricingInfo = this.createPricingInfo();
+
+      console.log("🤖 Using Gemini API for response generation");
+
+      const prompt = `${systemPrompt}
+
+CURRENT CONTEXT:
+${contextInfo}
+
+PRICING STRUCTURE:
+${pricingInfo}
+
+CONVERSATION HISTORY:
+${this.conversationHistory
+  .slice(-5)
+  .map((msg) => `User: ${msg.user}\nBot: ${msg.bot}`)
+  .join("\n")}
+
+USER MESSAGE: "${userMessage}"
+DETECTED INTENT: ${intent.intent}
+CONFIDENCE: ${(intent.confidence * 100).toFixed(0)}%
+
+RESPONSE REQUIREMENTS:
+- Keep responses SHORT (maximum 50 words)
+- Write in PARAGRAPH format (no bullet points or lists)
+- Be conversational and friendly
+- Focus on one main point per response
+- If pricing is discussed, provide specific ranges
+- Ask only ONE follow-up question if needed
+
+Respond as PrimaSpot's partnership assistant:`;
+
+      const response = await this.makeGeminiRequest(prompt);
+      return response;
+    } catch (error) {
+      console.error("Gemini API error:", error);
+      return null; // Fall back to static responses
+    }
+  }
+
+  /**
+   * Make Gemini API request with retry logic for rate limiting
+   */
+  async makeGeminiRequest(prompt, retryCount = 0) {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+
+    try {
+      const response = await fetch(
+        `${this.geminiConfig.apiUrl}?key=${this.geminiConfig.apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: this.geminiConfig.generationConfig,
+            safetySettings: this.geminiConfig.safetySettings || [],
+          }),
+        }
+      );
+
+      if (response.status === 429) {
+        // Rate limit hit
+        if (retryCount < maxRetries) {
+          const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+          console.log(
+            `⏳ Rate limit hit, retrying in ${delay}ms... (attempt ${
+              retryCount + 1
+            }/${maxRetries})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return this.makeGeminiRequest(prompt, retryCount + 1);
+        } else {
+          console.log("❌ Rate limit exceeded, max retries reached");
+          throw new Error(`Rate limit exceeded after ${maxRetries} retries`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Gemini API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        console.log("✅ Gemini API response received successfully");
+        return data.candidates[0].content.parts[0].text;
+      }
+
+      return null;
+    } catch (error) {
+      if (error.message.includes("Rate limit") && retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(
+          `⏳ Network error, retrying in ${delay}ms... (attempt ${
+            retryCount + 1
+          }/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.makeGeminiRequest(prompt, retryCount + 1);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create system prompt for Gemini
+   */
+  createSystemPrompt() {
+    return `You are PrimaSpot's AI influencer partnership assistant. Your role is to negotiate with influencers professionally, gather their metrics (followers, engagement, niche, platform), calculate fair pricing, and maintain a friendly business-focused tone.
+
+CRITICAL: Always respond in SHORT PARAGRAPHS (maximum 50 words). Never use bullet points or numbered lists. Write conversationally and focus on one main point per response. Ask only one follow-up question if needed. Show prices in Indian Rupees (₹) and be willing to negotiate within reasonable ranges.`;
+  }
+
+  /**
+   * Create context information for Gemini
+   */
+  createContextInfo() {
+    const context = this.userContext;
+    return `Platform: ${context.platform || "Not specified"}
+Followers: ${
+      context.followers ? context.followers.toLocaleString() : "Not specified"
+    }
+Engagement Rate: ${context.engagement || "Not specified"}
+Content Type: ${context.contentType || "Not specified"}
+Niche: ${context.niche || "Not specified"}
+Proposed Price: ${
+      context.proposedPrice
+        ? "₹" + context.proposedPrice.toLocaleString()
+        : "Not specified"
+    }
+Conversation Stage: ${context.conversationStage}
+Negotiation Stage: ${context.negotiationStage}`;
+  }
+
+  /**
+   * Create pricing information for Gemini
+   */
+  createPricingInfo() {
+    return `INSTAGRAM PRICING:
+Reels & Posts:
+- Nano (1K-10K): ₹3,000-₹6,000
+- Micro (10K-50K): ₹15,000-₹35,000
+- Macro (50K-200K): ₹40,000-₹1,50,000
+- Mega (200K-1M): ₹2,00,000-₹5,00,000
+
+YOUTUBE PRICING:
+Videos:
+- Nano (1K-10K): ₹10,000-₹15,000
+- Micro (10K-50K): ₹30,000-₹70,000
+- Macro (50K-200K): ₹80,000-₹3,00,000
+- Mega (200K-1M): ₹4,00,000-₹10,00,000
+
+Shorts:
+- Nano (1K-10K): ₹4,000-₹8,000
+- Micro (10K-50K): ₹15,000-₹40,000
+- Macro (50K-200K): ₹50,000-₹2,00,000
+- Mega (200K-1M): ₹2,50,000-₹6,00,000
+
+FACEBOOK PRICING:
+Posts & Reels:
+- Nano (1K-10K): ₹2,000-₹5,000
+- Micro (10K-50K): ₹10,000-₹25,000
+- Macro (50K-200K): ₹30,000-₹1,00,000
+- Mega (200K-1M): ₹1,20,000-₹3,00,000
+
+MULTIPLIERS:
+- High engagement (>8%): +10-20%
+- Premium niches (Tech, Business): +15%
+- Fashion/Beauty: +10%
+- Gen Z audience: +5%`;
+  }
+
+  /**
    * Analyze user message to determine intent
    */
   analyzeIntent(message) {
@@ -725,6 +958,30 @@ class InfluencerNegotiationBot {
     } else if (intent.intent === "influencer_introduction") {
       this.userContext.negotiationStage = "discussing";
     }
+
+    // Update conversation stage for dynamic quick actions
+    if (
+      this.userContext.platform &&
+      this.userContext.conversationStage === "greeting"
+    ) {
+      this.userContext.conversationStage = "platform_selected";
+    } else if (
+      this.userContext.followers &&
+      this.userContext.conversationStage === "platform_selected"
+    ) {
+      this.userContext.conversationStage = "followers_asked";
+    } else if (
+      this.userContext.engagement &&
+      this.userContext.conversationStage === "followers_asked"
+    ) {
+      this.userContext.conversationStage = "engagement_asked";
+    } else if (
+      this.userContext.proposedPrice ||
+      (this.userContext.niche &&
+        this.userContext.conversationStage === "engagement_asked")
+    ) {
+      this.userContext.conversationStage = "pricing";
+    }
   }
 
   /**
@@ -734,6 +991,30 @@ class InfluencerNegotiationBot {
     const responses =
       this.responses[intent.intent] || this.responses["default"];
     let response = responses[Math.floor(Math.random() * responses.length)];
+
+    // Add stage-specific follow-up questions
+    if (intent.intent === "platform_mention" && !this.userContext.followers) {
+      response +=
+        " How many followers do you have on " + this.userContext.platform + "?";
+    } else if (
+      intent.intent === "follower_count" &&
+      !this.userContext.engagement
+    ) {
+      response += " What's your typical engagement rate?";
+    } else if (
+      intent.intent === "engagement_metrics" &&
+      !this.userContext.niche
+    ) {
+      response += " What niche or category does your content focus on?";
+    } else if (
+      this.userContext.followers &&
+      this.userContext.platform &&
+      !this.userContext.proposedPrice &&
+      intent.intent !== "price_quote"
+    ) {
+      // If we have enough info but no price quote yet, ask for their rates
+      response += " What are your usual rates for sponsored content?";
+    }
 
     // Replace placeholders with actual data
     if (this.userContext.platform) {
@@ -801,15 +1082,21 @@ class InfluencerNegotiationBot {
    * Process user message and generate response
    */
   async processMessage(message) {
-    // Simulate AI processing time
-    await new Promise((resolve) =>
-      setTimeout(resolve, 1000 + Math.random() * 2000)
-    );
-
     const intent = this.analyzeIntent(message);
     this.updateContext(message, intent);
 
-    const response = this.generateResponse(intent);
+    // Try to get response from Gemini API first
+    let response = await this.generateGeminiResponse(
+      message,
+      intent,
+      this.userContext
+    );
+
+    // Fall back to static responses if Gemini fails
+    if (!response) {
+      console.log("📝 Using static responses (Gemini not available)");
+      response = this.generateResponse(intent);
+    }
 
     // Store conversation
     this.conversationHistory.push({
@@ -874,6 +1161,242 @@ class InfluencerNegotiationBot {
     this.isProcessing = false;
     document.getElementById("sendButton").disabled = false;
     input.focus();
+
+    // Update quick actions based on conversation stage
+    this.updateQuickActions();
+  }
+
+  /**
+   * Update quick action buttons based on conversation stage
+   */
+  updateQuickActions() {
+    const quickActionsContainer = document.getElementById("quickActions");
+    if (!quickActionsContainer) return;
+
+    let quickActions = [];
+
+    switch (this.userContext.conversationStage) {
+      case "greeting":
+        quickActions = [
+          {
+            text: "📸 Instagram Creator",
+            message: "I create content on Instagram",
+          },
+          {
+            text: "📺 YouTube Creator",
+            message: "I create content on YouTube",
+          },
+          {
+            text: "📘 Facebook Creator",
+            message: "I create content on Facebook",
+          },
+          { text: "🎵 TikTok Creator", message: "I create content on TikTok" },
+        ];
+        break;
+
+      case "platform_selected":
+        if (this.userContext.platform === "instagram") {
+          quickActions = [
+            { text: "📸 Instagram Reels", message: "I create Instagram reels" },
+            { text: "📷 Instagram Posts", message: "I create Instagram posts" },
+            {
+              text: "📊 Share Followers",
+              message: "I have followers on Instagram",
+            },
+            { text: "💰 Quote Rate", message: "My rate is ₹25,000 per post" },
+          ];
+        } else if (this.userContext.platform === "youtube") {
+          quickActions = [
+            { text: "📺 YouTube Videos", message: "I create YouTube videos" },
+            { text: "🎬 YouTube Shorts", message: "I create YouTube shorts" },
+            {
+              text: "📊 Share Subscribers",
+              message: "I have subscribers on YouTube",
+            },
+            { text: "💰 Quote Rate", message: "My rate is ₹50,000 per video" },
+          ];
+        } else if (this.userContext.platform === "facebook") {
+          quickActions = [
+            { text: "📘 Facebook Posts", message: "I create Facebook posts" },
+            { text: "🎥 Facebook Reels", message: "I create Facebook reels" },
+            {
+              text: "📊 Share Followers",
+              message: "I have followers on Facebook",
+            },
+            { text: "💰 Quote Rate", message: "My rate is ₹15,000 per post" },
+          ];
+        } else {
+          quickActions = [
+            { text: "📊 Share Followers", message: "I have followers" },
+            { text: "📈 Share Engagement", message: "My engagement rate is" },
+            { text: "🎯 Share Niche", message: "My content niche is" },
+            { text: "💰 Quote Rate", message: "My rate is" },
+          ];
+        }
+        break;
+
+      case "followers_asked":
+        quickActions = [
+          { text: "📈 5% Engagement", message: "My engagement rate is 5%" },
+          { text: "📈 8% Engagement", message: "My engagement rate is 8%" },
+          { text: "📈 12% Engagement", message: "My engagement rate is 12%" },
+          { text: "🎯 Share Niche", message: "My content is about fashion" },
+        ];
+        break;
+
+      case "engagement_asked":
+        quickActions = [
+          { text: "👗 Fashion", message: "My niche is fashion" },
+          { text: "💄 Beauty", message: "My niche is beauty" },
+          { text: "💻 Tech", message: "My niche is tech" },
+          { text: "🏋️ Fitness", message: "My niche is fitness" },
+        ];
+        break;
+
+      case "pricing":
+        quickActions = [
+          { text: "✅ Accept Offer", message: "I accept your offer" },
+          { text: "💬 Negotiate", message: "Can we negotiate the price?" },
+          { text: "❌ Decline", message: "The price is too low for me" },
+          {
+            text: "📋 More Details",
+            message: "Can you tell me more about the campaign?",
+          },
+        ];
+        break;
+
+      default:
+        quickActions = [
+          {
+            text: "📸 Instagram Creator",
+            message: "I create content on Instagram",
+          },
+          {
+            text: "📺 YouTube Creator",
+            message: "I create content on YouTube",
+          },
+          {
+            text: "📘 Facebook Creator",
+            message: "I create content on Facebook",
+          },
+          { text: "💰 Quote Rate", message: "My rate is ₹25,000 per post" },
+        ];
+    }
+
+    // Update the HTML
+    quickActionsContainer.innerHTML = quickActions
+      .map(
+        (action) =>
+          `<div class="quick-action" onclick="sendQuickMessage('${action.message}')">${action.text}</div>`
+      )
+      .join("");
+  }
+
+  /**
+   * Call Google Gemini API for enhanced responses
+   */
+  async callGeminiAPI(userMessage, context) {
+    if (
+      !this.geminiConfig.enabled ||
+      !this.geminiConfig.apiKey ||
+      this.geminiConfig.apiKey === "YOUR_GEMINI_API_KEY"
+    ) {
+      console.log("Gemini API not configured, using fallback responses");
+      return null;
+    }
+
+    try {
+      const prompt = this.buildGeminiPrompt(userMessage, context);
+
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: this.geminiConfig.generationConfig,
+        safetySettings: this.geminiConfig.safetySettings,
+      };
+
+      const response = await fetch(
+        this.geminiConfig.apiUrl + `?key=${this.geminiConfig.apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Gemini API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        console.warn("Unexpected Gemini API response format:", data);
+        return null;
+      }
+    } catch (error) {
+      console.error("Error calling Gemini API:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Build a comprehensive prompt for Gemini API
+   */
+  buildGeminiPrompt(userMessage, context) {
+    const systemPrompt = `You are PrimaSpot's AI partnership assistant, specialized in influencer marketing negotiations. You help brands connect with content creators across Instagram, YouTube, TikTok, and other platforms.
+
+Your role:
+- Negotiate fair partnerships between brands and influencers
+- Calculate appropriate pricing based on follower count, engagement rates, and demographics
+- Maintain a professional, friendly, and business-focused tone
+- Help both parties reach mutually beneficial agreements
+
+Current conversation context:
+- Platform: ${context.platform || "Not specified"}
+- Followers: ${
+      context.followers ? context.followers.toLocaleString() : "Not specified"
+    }
+- Engagement Rate: ${context.engagement || "Not specified"}
+- Niche: ${context.niche || "Not specified"}
+- Negotiation Stage: ${context.negotiationStage}
+- Conversation Stage: ${context.conversationStage}
+- Counter Offers Made: ${context.counterOfferCount}
+
+Pricing Guidelines (in Indian Rupees):
+- Instagram Reels/Posts: ₹3,000-₹6,000 (1K-10K followers), ₹15,000-₹35,000 (10K-50K), ₹40,000-₹150,000 (50K-200K)
+- YouTube Videos: ₹10,000-₹15,000 (1K-10K), ₹30,000-₹70,000 (10K-50K), ₹80,000-₹300,000 (50K-200K)
+- Facebook Posts: ₹2,000-₹5,000 (1K-10K), ₹10,000-₹25,000 (10K-50K), ₹30,000-₹100,000 (50K-200K)
+
+Engagement multipliers: Low (<2%): 0.8x, Average (2-5%): 1.0x, High (5-10%): 1.3x, Excellent (>10%): 1.6x
+Niche multipliers: Tech/Business: 1.3x, Fashion/Beauty: 1.2x, Fitness: 1.1x, Lifestyle/Food: 1.0x
+
+User message: "${userMessage}"
+
+RESPONSE REQUIREMENTS:
+- Keep responses SHORT (maximum 50 words)
+- Write in PARAGRAPH format (no bullet points or lists)
+- Be conversational and friendly
+- Focus on one main point per response
+- If pricing is discussed, provide specific ranges
+- Ask only ONE follow-up question if needed
+
+Respond as PrimaSpot's partnership assistant:`;
+
+    return systemPrompt;
   }
 
   /**

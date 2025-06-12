@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BrandCorp Influencer Partnerships</title>
+    <title>PrimaSpot Influencer Partnerships</title>
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
     <div class="chat-container">
       <div class="chat-header">
-        <h1>BrandCorp Influencer Hub</h1>
+        <h1>PrimaSpot Influencer Hub</h1>
         <div class="status-indicator">
           <div class="status-dot"></div>
           <span>Partnership Bot Online</span>
@@ -19,7 +19,7 @@
       <div class="chat-messages" id="chatMessages">
         <div class="message bot-message">
           <div class="message-content">
-            Hello! I'm BrandCorp's AI partnership assistant. We're actively
+            Hello! I'm PrimaSpot's AI partnership assistant. We're actively
             seeking talented influencers and content creators for brand
             collaborations across Instagram, YouTube, TikTok, and other
             platforms. Are you an influencer interested in partnering with us?
@@ -29,30 +29,7 @@
 
       <div class="chat-input">
         <div class="quick-actions" id="quickActions">
-          <div
-            class="quick-action"
-            onclick="sendQuickMessage('I have 75k Instagram followers and create reels in fashion niche')"
-          >
-            📸 Instagram Reels
-          </div>
-          <div
-            class="quick-action"
-            onclick="sendQuickMessage('I create YouTube videos with 150k subscribers in tech niche')"
-          >
-            📺 YouTube Videos
-          </div>
-          <div
-            class="quick-action"
-            onclick="sendQuickMessage('I have 25k followers and create Facebook posts with 6% engagement')"
-          >
-            📘 Facebook Posts
-          </div>
-          <div
-            class="quick-action"
-            onclick="sendQuickMessage('My rate is ₹25,000 per sponsored post')"
-          >
-            💰 Quote Rate
-          </div>
+          <!-- Quick actions will be dynamically generated -->
         </div>
         <div class="input-container">
           <input
@@ -89,6 +66,7 @@
 
     <!-- JavaScript Files -->
     <script src="js/config.js"></script>
+    <script src="js/gemini-config.js"></script>
     <script src="js/influencer-bot.js"></script>
     <script src="js/app.js"></script>
   </body>

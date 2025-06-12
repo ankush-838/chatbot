@@ -19,6 +19,23 @@ class ServiceNegotiationBot {
     this.responses = this.initializeResponses();
     this.isProcessing = false;
 
+    // Google Gemini API configuration
+    this.geminiConfig =
+      typeof GEMINI_CONFIG !== "undefined"
+        ? GEMINI_CONFIG
+        : {
+            apiKey: "YOUR_GEMINI_API_KEY",
+            apiUrl:
+              "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            enabled: false,
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+            },
+          };
+
     // Company's budget ranges for different services
     this.budgetRanges = {
       web_development: { min: 5000, max: 15000, preferred: 8000 },
@@ -480,18 +497,217 @@ class ServiceNegotiationBot {
   }
 
   /**
+   * Generate response using Google Gemini API
+   */
+  async generateGeminiResponse(userMessage, intent, context) {
+    console.log("🔍 Checking Gemini configuration...");
+    console.log("Enabled:", this.geminiConfig.enabled);
+    console.log(
+      "API Key present:",
+      this.geminiConfig.apiKey &&
+        this.geminiConfig.apiKey !== "YOUR_GEMINI_API_KEY"
+    );
+
+    if (
+      !this.geminiConfig.enabled ||
+      !this.geminiConfig.apiKey ||
+      this.geminiConfig.apiKey === "YOUR_GEMINI_API_KEY"
+    ) {
+      console.log(
+        "❌ Gemini not configured properly, falling back to static responses"
+      );
+      return null; // Fall back to static responses
+    }
+
+    try {
+      // Create context for Gemini
+      const systemPrompt = this.createSystemPrompt();
+      const contextInfo = this.createContextInfo();
+      const budgetInfo = this.createBudgetInfo();
+
+      console.log("🤖 Using Gemini API for response generation");
+
+      const prompt = `${systemPrompt}
+
+CURRENT CONTEXT:
+${contextInfo}
+
+BUDGET STRUCTURE:
+${budgetInfo}
+
+CONVERSATION HISTORY:
+${this.conversationHistory
+  .slice(-5)
+  .map((msg) => `User: ${msg.user}\nBot: ${msg.bot}`)
+  .join("\n")}
+
+USER MESSAGE: "${userMessage}"
+DETECTED INTENT: ${intent.intent}
+CONFIDENCE: ${(intent.confidence * 100).toFixed(0)}%
+
+Please provide a professional, helpful response as TechCorp's procurement assistant. Be conversational but business-focused. If pricing negotiations are needed, use the provided budget structure.`;
+
+      const response = await this.makeGeminiRequest(prompt);
+      return response;
+    } catch (error) {
+      console.error("Gemini API error:", error);
+      return null; // Fall back to static responses
+    }
+  }
+
+  /**
+   * Make Gemini API request with retry logic for rate limiting
+   */
+  async makeGeminiRequest(prompt, retryCount = 0) {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+
+    try {
+      const response = await fetch(
+        `${this.geminiConfig.apiUrl}?key=${this.geminiConfig.apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: this.geminiConfig.generationConfig,
+            safetySettings: this.geminiConfig.safetySettings || [],
+          }),
+        }
+      );
+
+      if (response.status === 429) {
+        // Rate limit hit
+        if (retryCount < maxRetries) {
+          const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+          console.log(
+            `⏳ Rate limit hit, retrying in ${delay}ms... (attempt ${
+              retryCount + 1
+            }/${maxRetries})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return this.makeGeminiRequest(prompt, retryCount + 1);
+        } else {
+          console.log("❌ Rate limit exceeded, max retries reached");
+          throw new Error(`Rate limit exceeded after ${maxRetries} retries`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Gemini API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        console.log("✅ Gemini API response received successfully");
+        return data.candidates[0].content.parts[0].text;
+      }
+
+      return null;
+    } catch (error) {
+      if (error.message.includes("Rate limit") && retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(
+          `⏳ Network error, retrying in ${delay}ms... (attempt ${
+            retryCount + 1
+          }/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.makeGeminiRequest(prompt, retryCount + 1);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create system prompt for Gemini
+   */
+  createSystemPrompt() {
+    return `You are TechCorp's AI procurement assistant. Your role is to:
+
+1. NEGOTIATE with service providers professionally and fairly
+2. GATHER information about their services, experience, and pricing
+3. EVALUATE proposals based on our budget constraints
+4. MAINTAIN a friendly but business-focused tone
+5. ASK follow-up questions to gather missing information
+6. PROVIDE counter-offers based on our budget ranges
+
+Key Guidelines:
+- Always be professional and respectful
+- Ask for missing information (service details, timeline, portfolio)
+- Use our budget ranges to guide negotiations
+- Be open to finding mutually beneficial agreements
+- Escalate to management when needed
+- Focus on value and quality, not just price`;
+  }
+
+  /**
+   * Create context information for Gemini
+   */
+  createContextInfo() {
+    const context = this.userContext;
+    return `Current Service: ${context.currentService || "Not specified"}
+Proposed Price: ${
+      context.proposedPrice
+        ? `$${context.proposedPrice.toLocaleString()}`
+        : "Not provided"
+    }
+Negotiation Stage: ${context.negotiationStage}
+Counter Offers Made: ${context.counterOfferCount}
+Sentiment: ${context.sentiment}
+Service Provider: ${context.serviceProvider || "Unknown"}
+Agreed Terms: ${
+      context.agreedTerms.length > 0
+        ? context.agreedTerms.join(", ")
+        : "None yet"
+    }`;
+  }
+
+  /**
+   * Create budget information for Gemini
+   */
+  createBudgetInfo() {
+    let budgetInfo = "TechCorp Budget Ranges (USD):\n";
+    for (const [service, budget] of Object.entries(this.budgetRanges)) {
+      budgetInfo += `${service
+        .replace("_", " ")
+        .toUpperCase()}: $${budget.min.toLocaleString()} - $${budget.max.toLocaleString()} (Preferred: $${budget.preferred.toLocaleString()})\n`;
+    }
+    return budgetInfo;
+  }
+
+  /**
    * Process user message and generate response
    */
   async processMessage(message) {
-    // Simulate AI processing time
-    await new Promise((resolve) =>
-      setTimeout(resolve, 1000 + Math.random() * 2000)
-    );
-
     const intent = this.analyzeIntent(message);
     this.updateContext(message, intent);
 
-    const response = this.generateResponse(intent);
+    // Try to get response from Gemini API first
+    let response = await this.generateGeminiResponse(
+      message,
+      intent,
+      this.userContext
+    );
+
+    // Fall back to static responses if Gemini fails
+    if (!response) {
+      console.log("📝 Using static responses (Gemini not available)");
+      response = this.generateResponse(intent);
+    }
 
     // Store conversation
     this.conversationHistory.push({
