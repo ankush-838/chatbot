@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test Influencer Bot</title>
+  </head>
+  <body>
+    <h1>Testing Influencer Bot Components</h1>
+
+    <script src="js/influencer-bot.js"></script>
+    <script>
+      // Test the bot initialization
+      try {
+        const bot = new InfluencerNegotiationBot();
+        console.log("✅ Bot initialized successfully");
+
+        // Test metrics extraction
+        const testMessage =
+          "I have 50k Instagram followers with 5% engagement rate in fashion niche";
+        const metrics = bot.extractMetrics(testMessage);
+        console.log("✅ Metrics extraction:", metrics);
+
+        // Test price calculation
+        const price = bot.calculateFairPrice(
+          50000,
+          "instagram",
+          "5%",
+          "female_majority",
+          "fashion"
+        );
+        console.log("✅ Price calculation:", price);
+
+        // Test intent analysis
+        const intent = bot.analyzeIntent(testMessage);
+        console.log("✅ Intent analysis:", intent);
+
+        document.body.innerHTML +=
+          "<p>✅ All tests passed! Check console for details.</p>";
+      } catch (error) {
+        console.error("❌ Error:", error);
+        document.body.innerHTML += "<p>❌ Error: " + error.message + "</p>";
+      }
+    </script>
+  </body>
+</html>

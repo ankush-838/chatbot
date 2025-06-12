@@ -1,14 +1,14 @@
 /**
- * Configuration file for the AI Customer Service Chatbot
- * Modify these settings to customize the chatbot behavior
+ * Configuration file for the Influencer Marketing Negotiation Bot
+ * Modify these settings to customize the negotiation bot behavior
  */
 
 const ChatbotConfig = {
   // UI Settings
   ui: {
-    title: "AI Customer Support",
-    statusText: "AI Assistant Online",
-    placeholder: "Type your message...",
+    title: "BrandCorp Influencer Hub",
+    statusText: "Partnership Bot Online",
+    placeholder: "Tell us about your platform, followers, and rates...",
     maxMessageLength: 500,
     typingDelayMin: 1000,
     typingDelayMax: 3000,
@@ -17,37 +17,44 @@ const ChatbotConfig = {
   // Quick Actions Configuration
   quickActions: [
     {
-      text: "📦 Track Order",
-      message: "Track my order",
+      text: "📸 Instagram Reels",
+      message:
+        "I have 75k Instagram followers and create reels in fashion niche",
     },
     {
-      text: "↩️ Returns",
-      message: "Return policy",
+      text: "📺 YouTube Videos",
+      message: "I create YouTube videos with 150k subscribers in tech niche",
     },
     {
-      text: "🔧 Tech Support",
-      message: "Technical support",
+      text: "📘 Facebook Posts",
+      message:
+        "I have 25k followers and create Facebook posts with 6% engagement",
     },
     {
-      text: "💳 Billing",
-      message: "Billing question",
+      text: "💰 Quote Rate",
+      message: "My rate is ₹25,000 per sponsored post",
     },
   ],
 
-  // AI Behavior Settings
-  ai: {
+  // Influencer Negotiation Settings
+  negotiation: {
     // Confidence threshold for intent recognition
     confidenceThreshold: 0.3,
 
-    // Number of negative messages before escalation
-    escalationThreshold: 2,
+    // Number of counter-offers before escalation
+    maxCounterOffers: 3,
+
+    // Budget flexibility percentage
+    budgetFlexibility: 0.15, // 15% above calculated fair price
 
     // Enable/disable features
     features: {
       intentDisplay: true,
       contextDisplay: true,
-      sentimentAnalysis: true,
-      conversationHistory: true,
+      metricsTracking: true,
+      negotiationHistory: true,
+      priceCalculation: true,
+      demographicsAnalysis: true,
     },
   },
 

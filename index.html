@@ -3,25 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Customer Service Chat</title>
+    <title>BrandCorp Influencer Partnerships</title>
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
     <div class="chat-container">
       <div class="chat-header">
-        <h1>AI Customer Support</h1>
+        <h1>BrandCorp Influencer Hub</h1>
         <div class="status-indicator">
           <div class="status-dot"></div>
-          <span>AI Assistant Online</span>
+          <span>Partnership Bot Online</span>
         </div>
       </div>
 
       <div class="chat-messages" id="chatMessages">
         <div class="message bot-message">
           <div class="message-content">
-            Hello! I'm your AI customer service assistant. I can help you with
-            orders, returns, technical support, and general inquiries. How can I
-            assist you today?
+            Hello! I'm BrandCorp's AI partnership assistant. We're actively
+            seeking talented influencers and content creators for brand
+            collaborations across Instagram, YouTube, TikTok, and other
+            platforms. Are you an influencer interested in partnering with us?
           </div>
         </div>
       </div>
@@ -30,24 +31,27 @@
         <div class="quick-actions" id="quickActions">
           <div
             class="quick-action"
-            onclick="sendQuickMessage('Track my order')"
+            onclick="sendQuickMessage('I have 75k Instagram followers and create reels in fashion niche')"
           >
-            📦 Track Order
-          </div>
-          <div class="quick-action" onclick="sendQuickMessage('Return policy')">
-            ↩️ Returns
+            📸 Instagram Reels
           </div>
           <div
             class="quick-action"
-            onclick="sendQuickMessage('Technical support')"
+            onclick="sendQuickMessage('I create YouTube videos with 150k subscribers in tech niche')"
           >
-            🔧 Tech Support
+            📺 YouTube Videos
           </div>
           <div
             class="quick-action"
-            onclick="sendQuickMessage('Billing question')"
+            onclick="sendQuickMessage('I have 25k followers and create Facebook posts with 6% engagement')"
           >
-            💳 Billing
+            📘 Facebook Posts
+          </div>
+          <div
+            class="quick-action"
+            onclick="sendQuickMessage('My rate is ₹25,000 per sponsored post')"
+          >
+            💰 Quote Rate
           </div>
         </div>
         <div class="input-container">
@@ -85,7 +89,7 @@
 
     <!-- JavaScript Files -->
     <script src="js/config.js"></script>
-    <script src="js/chatbot.js"></script>
+    <script src="js/influencer-bot.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

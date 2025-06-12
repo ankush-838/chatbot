@@ -1,20 +1,34 @@
 /**
- * AI Customer Service Chatbot
- * Handles intent recognition, sentiment analysis, and response generation
+ * AI Service Procurement Negotiation Bot
+ * Handles price negotiations, service discussions, and contract terms
  */
-class AICustomerServiceBot {
+class ServiceNegotiationBot {
   constructor() {
     this.conversationHistory = [];
     this.userContext = {
       lastTopic: null,
-      currentIssue: null,
+      currentService: null,
       sentiment: "neutral",
-      hasOrderNumber: false,
-      escalationLevel: 0,
+      proposedPrice: null,
+      counterOfferCount: 0,
+      negotiationStage: "initial", // initial, discussing, negotiating, finalizing
+      serviceProvider: null,
+      agreedTerms: [],
     };
     this.intents = this.initializeIntents();
     this.responses = this.initializeResponses();
     this.isProcessing = false;
+
+    // Company's budget ranges for different services
+    this.budgetRanges = {
+      web_development: { min: 5000, max: 15000, preferred: 8000 },
+      mobile_app: { min: 8000, max: 25000, preferred: 12000 },
+      digital_marketing: { min: 2000, max: 8000, preferred: 4000 },
+      content_creation: { min: 1000, max: 5000, preferred: 2500 },
+      seo_services: { min: 1500, max: 6000, preferred: 3000 },
+      consulting: { min: 3000, max: 12000, preferred: 6000 },
+      design_services: { min: 2000, max: 10000, preferred: 5000 },
+    };
 
     this.initializeEventListeners();
   }
@@ -39,70 +53,116 @@ class AICustomerServiceBot {
   }
 
   /**
-   * Initialize intent recognition patterns and keywords
+   * Initialize intent recognition patterns and keywords for service negotiation
    */
   initializeIntents() {
     return {
-      order_tracking: {
+      service_offering: {
         keywords: [
-          "track",
-          "order",
-          "shipment",
-          "delivery",
-          "status",
-          "where is",
-          "when will",
+          "offer",
+          "provide",
+          "service",
+          "development",
+          "design",
+          "marketing",
+          "consulting",
+          "can do",
+          "specialize",
         ],
-        patterns: [/order\s*#?\s*\d+/i, /tracking\s*number/i, /shipped/i],
+        patterns: [
+          /i\s*(can|offer|provide)/i,
+          /we\s*(specialize|offer)/i,
+          /our\s*services/i,
+        ],
         confidence: 0,
       },
-      returns: {
+      price_quote: {
         keywords: [
-          "return",
-          "refund",
-          "exchange",
-          "defective",
-          "wrong item",
-          "damaged",
-        ],
-        patterns: [/return\s*policy/i, /money\s*back/i, /exchange/i],
-        confidence: 0,
-      },
-      technical_support: {
-        keywords: [
-          "technical",
-          "support",
-          "bug",
-          "error",
-          "not working",
-          "broken",
-          "fix",
-        ],
-        patterns: [/tech\s*support/i, /doesn't\s*work/i, /error\s*\d+/i],
-        confidence: 0,
-      },
-      billing: {
-        keywords: [
-          "billing",
-          "payment",
+          "price",
+          "cost",
+          "quote",
+          "rate",
+          "fee",
           "charge",
-          "invoice",
-          "credit card",
-          "subscription",
+          "budget",
+          "dollar",
+          "payment",
         ],
-        patterns: [/billed/i, /charged/i, /payment\s*failed/i],
+        patterns: [/\$\d+/i, /\d+\s*dollars?/i, /price\s*is/i, /costs?\s*\d+/i],
         confidence: 0,
       },
-      product_info: {
+      negotiation: {
         keywords: [
-          "product",
-          "item",
-          "specifications",
-          "features",
-          "compatibility",
-          "size",
+          "negotiate",
+          "lower",
+          "reduce",
+          "discount",
+          "better price",
+          "deal",
+          "compromise",
+          "flexible",
         ],
-        patterns: [/tell\s*me\s*about/i, /what\s*is/i, /how\s*does/i],
+        patterns: [/can\s*you\s*do\s*better/i, /negotiate/i, /lower\s*price/i],
+        confidence: 0,
+      },
+      timeline_discussion: {
+        keywords: [
+          "timeline",
+          "deadline",
+          "delivery",
+          "complete",
+          "finish",
+          "duration",
+          "time",
+          "weeks",
+          "months",
+        ],
+        patterns: [/how\s*long/i, /when\s*can/i, /timeline/i, /\d+\s*weeks?/i],
+        confidence: 0,
+      },
+      requirements_discussion: {
+        keywords: [
+          "requirements",
+          "features",
+          "specifications",
+          "need",
+          "want",
+          "include",
+          "scope",
+        ],
+        patterns: [/what\s*do\s*you\s*need/i, /requirements/i, /features/i],
+        confidence: 0,
+      },
+      agreement: {
+        keywords: [
+          "agree",
+          "accept",
+          "deal",
+          "yes",
+          "okay",
+          "sounds good",
+          "let's do it",
+          "proceed",
+        ],
+        patterns: [/i\s*agree/i, /sounds?\s*good/i, /let'?s\s*do/i, /deal/i],
+        confidence: 0,
+      },
+      rejection: {
+        keywords: [
+          "no",
+          "reject",
+          "decline",
+          "too high",
+          "expensive",
+          "can't do",
+          "not interested",
+        ],
+        patterns: [
+          /too\s*high/i,
+          /too\s*expensive/i,
+          /can'?t\s*do/i,
+          /not\s*interested/i,
+        ],
         confidence: 0,
       },
       greeting: {
@@ -117,66 +177,58 @@ class AICustomerServiceBot {
         patterns: [/^(hi|hello|hey)/i],
         confidence: 0,
       },
-      complaint: {
-        keywords: [
-          "angry",
-          "frustrated",
-          "terrible",
-          "awful",
-          "worst",
-          "disappointed",
-          "upset",
-        ],
-        patterns: [/this\s*is\s*ridiculous/i, /fed\s*up/i, /unacceptable/i],
-        confidence: 0,
-      },
     };
   }
 
   /**
-   * Initialize response templates for different intents
+   * Initialize response templates for service negotiation
    */
   initializeResponses() {
     return {
-      order_tracking: [
-        "I'd be happy to help you track your order! Could you please provide your order number? It usually starts with # followed by 6-8 digits.",
-        "To track your order, I'll need your order number or the email address used for the purchase. Do you have that information handy?",
-        "Let me help you find your order status. Please share your order number, and I'll look it up for you right away.",
+      service_offering: [
+        "That sounds interesting! We're always looking for quality service providers. What specific services do you offer, and what's your experience in this area?",
+        "Great! We have several upcoming projects that might be a good fit. Could you tell me more about your expertise and the services you provide?",
+        "Perfect timing! We're actively seeking service providers. What's your specialty, and do you have a portfolio or examples of your previous work?",
       ],
-      returns: [
-        "I can definitely help with returns! Our return policy allows returns within 30 days of purchase. What item would you like to return and what's the reason?",
-        "No problem with processing your return. Could you tell me more about the item and why you'd like to return it? I'll guide you through the process.",
-        "I'll be glad to assist with your return. What's the order number and which item needs to be returned?",
+      price_quote: [
+        "Thank you for the quote. Let me review this with our budget parameters. Our typical range for this type of service is different from what you've proposed. Can we discuss this further?",
+        "I appreciate the pricing information. However, we're working with a tighter budget for this project. Would you be open to negotiating the price?",
+        "Thanks for the quote. We're comparing several proposals right now. Is there any flexibility in your pricing, especially if we commit to a longer-term partnership?",
       ],
-      technical_support: [
-        "I'm here to help resolve your technical issue. Can you describe what specific problem you're experiencing? The more details you provide, the better I can assist you.",
-        "Let's troubleshoot this together! What device or service are you having trouble with, and what exactly is happening?",
-        "Technical issues can be frustrating, but I'm confident we can solve this. Please describe the problem and any error messages you're seeing.",
+      negotiation: [
+        "I appreciate your willingness to negotiate! Based on our budget and the scope of work, we were thinking more in the range of [BUDGET_RANGE]. What are your thoughts on that?",
+        "Great that you're open to discussion! We value quality work, but we also need to stay within our allocated budget. Can we find a middle ground that works for both of us?",
+        "Excellent! We believe in fair partnerships. If we can adjust the scope slightly or extend the timeline, would that help you meet our budget requirements?",
       ],
-      billing: [
-        "I can help clarify any billing questions you have. Are you asking about a specific charge, payment method, or subscription details?",
-        "Let me assist you with your billing inquiry. Could you provide more details about what you're seeing on your account or statement?",
-        "I'm here to help resolve billing concerns. What specific billing issue can I help you with today?",
+      timeline_discussion: [
+        "Timeline is important for us. We're looking to start as soon as possible. What's your current availability, and how quickly can you deliver?",
+        "Good question about timing. We have some flexibility, but we'd prefer to complete this within [TIMELINE]. Does that work with your schedule?",
+        "We're planning to launch this project soon. If you can meet our timeline requirements, it would definitely strengthen your proposal. What's realistic for you?",
       ],
-      product_info: [
-        "I'd be happy to provide product information! Which specific product are you interested in learning more about?",
-        "What product would you like to know more about? I can share details about features, specifications, and compatibility.",
-        "I can provide detailed product information. What specific product or feature are you curious about?",
+      requirements_discussion: [
+        "Let me outline what we're looking for: [REQUIREMENTS]. Does this align with your capabilities? Are there any additional features you'd recommend?",
+        "Our requirements are quite specific. We need [REQUIREMENTS]. Can you handle all of these aspects, or would you recommend partnering with other specialists?",
+        "Here's what we have in mind: [REQUIREMENTS]. Based on your experience, is this scope realistic, and are there any potential challenges we should discuss?",
+      ],
+      agreement: [
+        "Excellent! I'm glad we could reach an agreement. Let me summarize what we've discussed: [SUMMARY]. I'll prepare the contract details and next steps.",
+        "Perfect! This sounds like a great partnership. We'll move forward with [AGREED_TERMS]. I'll send you the formal agreement within 24 hours.",
+        "Wonderful! I'm excited to work with you. Based on our discussion, we'll proceed with [AGREED_TERMS]. What information do you need from us to get started?",
+      ],
+      rejection: [
+        "I understand your position. Unfortunately, that pricing doesn't align with our current budget constraints. If your situation changes or you'd like to reconsider, please let us know.",
+        "No problem, I appreciate your honesty. We'll keep your information on file for future projects that might have a better budget fit. Thank you for your time.",
+        "That's perfectly fine. We respect your pricing structure. If we have projects with larger budgets in the future, we'd love to reconnect. Thanks for the discussion!",
       ],
       greeting: [
-        "Hello! Great to see you today. I'm your AI customer service assistant, ready to help with any questions or concerns you might have.",
-        "Hi there! Welcome to our customer support. I'm here to assist you with orders, returns, technical issues, or any other questions.",
-        "Hello! I'm your dedicated AI assistant for customer service. How can I make your day better?",
-      ],
-      complaint: [
-        "I sincerely apologize for the frustrating experience you've had. I understand how disappointing this must be, and I'm here to make things right. Let me know exactly what happened so I can help resolve this immediately.",
-        "I'm truly sorry you're having such a negative experience. Your frustration is completely understandable, and I want to turn this around for you. Please tell me what's gone wrong so I can fix it right away.",
-        "I can hear how upset you are, and I don't blame you. Let me personally ensure we resolve this issue today. What specifically has caused this problem?",
+        "Hello! Welcome to TechCorp's procurement department. I'm here to discuss potential service partnerships. Are you a service provider looking to work with us?",
+        "Hi there! I'm the AI procurement assistant for TechCorp. We're always interested in connecting with talented service providers. What services do you offer?",
+        "Good day! I represent TechCorp's vendor relations team. We're actively seeking service providers for various projects. How can we potentially work together?",
       ],
       default: [
-        "I want to make sure I help you with exactly what you need. Could you provide a bit more detail about your question or concern?",
-        "I'm here to assist you! Could you elaborate on what you're looking for help with today?",
-        "I'd love to help you out. Can you give me some more information about what you need assistance with?",
+        "I want to make sure I understand your proposal correctly. Could you provide more details about your services and pricing?",
+        "Let me make sure we're on the same page. Are you offering services to our company? If so, what specific services and at what cost?",
+        "I'd like to better understand your offering. Could you clarify what services you provide and how we might work together?",
       ],
     };
   }
@@ -280,21 +332,49 @@ class AICustomerServiceBot {
     this.userContext.lastTopic = intent.intent;
     this.userContext.sentiment = this.analyzeSentiment(message);
 
-    // Check for order number
-    const orderMatch = message.match(/order\s*#?\s*(\d+)/i);
-    if (orderMatch) {
-      this.userContext.hasOrderNumber = true;
-      this.userContext.orderNumber = orderMatch[1];
+    // Extract price information
+    const priceMatch = message.match(/\$?(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+    if (priceMatch) {
+      this.userContext.proposedPrice = parseFloat(
+        priceMatch[1].replace(/,/g, "")
+      );
     }
 
-    // Escalation logic
-    if (this.userContext.sentiment === "negative") {
-      this.userContext.escalationLevel++;
-    } else {
-      this.userContext.escalationLevel = Math.max(
-        0,
-        this.userContext.escalationLevel - 1
-      );
+    // Detect service type
+    const serviceTypes = {
+      web: "web_development",
+      website: "web_development",
+      app: "mobile_app",
+      mobile: "mobile_app",
+      marketing: "digital_marketing",
+      seo: "seo_services",
+      content: "content_creation",
+      design: "design_services",
+      consulting: "consulting",
+    };
+
+    for (const [keyword, serviceType] of Object.entries(serviceTypes)) {
+      if (message.toLowerCase().includes(keyword)) {
+        this.userContext.currentService = serviceType;
+        break;
+      }
+    }
+
+    // Track negotiation progress
+    if (intent.intent === "negotiation" || intent.intent === "price_quote") {
+      this.userContext.counterOfferCount++;
+    }
+
+    // Update negotiation stage
+    if (intent.intent === "agreement") {
+      this.userContext.negotiationStage = "finalizing";
+    } else if (
+      intent.intent === "negotiation" ||
+      intent.intent === "price_quote"
+    ) {
+      this.userContext.negotiationStage = "negotiating";
+    } else if (intent.intent === "service_offering") {
+      this.userContext.negotiationStage = "discussing";
     }
   }
 
@@ -306,19 +386,97 @@ class AICustomerServiceBot {
       this.responses[intent.intent] || this.responses["default"];
     let response = responses[Math.floor(Math.random() * responses.length)];
 
-    // Add contextual information
-    if (this.userContext.hasOrderNumber && intent.intent === "order_tracking") {
-      response += ` I can see you mentioned order #${this.userContext.orderNumber}. Let me look that up for you.`;
+    // Add contextual negotiation information
+    if (this.userContext.proposedPrice && intent.intent === "price_quote") {
+      const serviceType = this.userContext.currentService;
+      if (serviceType && this.budgetRanges[serviceType]) {
+        const budget = this.budgetRanges[serviceType];
+        if (this.userContext.proposedPrice > budget.max) {
+          response += ` Your quote of $${this.userContext.proposedPrice.toLocaleString()} is above our maximum budget of $${budget.max.toLocaleString()} for this type of service. Our preferred range is $${budget.min.toLocaleString()} - $${budget.preferred.toLocaleString()}.`;
+        } else if (this.userContext.proposedPrice > budget.preferred) {
+          response += ` Your quote of $${this.userContext.proposedPrice.toLocaleString()} is higher than our preferred budget of $${budget.preferred.toLocaleString()}. Can we work towards something closer to that range?`;
+        } else {
+          response += ` Your quote of $${this.userContext.proposedPrice.toLocaleString()} looks reasonable and fits within our budget expectations.`;
+        }
+      }
     }
 
-    // Handle escalation
-    if (this.userContext.escalationLevel > 2) {
-      response =
-        "I understand this situation is very frustrating for you. Let me connect you with a senior specialist who can provide more personalized assistance. " +
-        response;
+    // Handle negotiation counter-offers
+    if (
+      intent.intent === "negotiation" &&
+      this.userContext.counterOfferCount > 1
+    ) {
+      if (this.userContext.counterOfferCount > 3) {
+        response =
+          "I appreciate your persistence in finding a mutually beneficial agreement. Let me escalate this to our procurement manager who might have more flexibility in the budget. " +
+          response;
+      } else {
+        response =
+          "I can see we're both working hard to find common ground. " +
+          response;
+      }
+    }
+
+    // Add service-specific context
+    if (this.userContext.currentService) {
+      const serviceNames = {
+        web_development: "web development",
+        mobile_app: "mobile app development",
+        digital_marketing: "digital marketing",
+        content_creation: "content creation",
+        seo_services: "SEO services",
+        consulting: "consulting",
+        design_services: "design services",
+      };
+
+      if (intent.intent === "requirements_discussion") {
+        response = response.replace(
+          "[REQUIREMENTS]",
+          `${
+            serviceNames[this.userContext.currentService]
+          } with our specific requirements`
+        );
+      }
     }
 
     return response;
+  }
+
+  /**
+   * Generate a counter-offer based on budget constraints
+   */
+  generateCounterOffer(proposedPrice, serviceType) {
+    if (!serviceType || !this.budgetRanges[serviceType]) {
+      return null;
+    }
+
+    const budget = this.budgetRanges[serviceType];
+    let counterOffer;
+
+    if (proposedPrice > budget.max) {
+      // Offer maximum budget
+      counterOffer = budget.max;
+    } else if (proposedPrice > budget.preferred) {
+      // Offer something between preferred and their price
+      counterOffer = Math.round((budget.preferred + proposedPrice) / 2);
+    } else {
+      // Their price is acceptable
+      return null;
+    }
+
+    return counterOffer;
+  }
+
+  /**
+   * Check if a price is within acceptable range
+   */
+  isPriceAcceptable(price, serviceType) {
+    if (!serviceType || !this.budgetRanges[serviceType]) {
+      return false;
+    }
+
+    const budget = this.budgetRanges[serviceType];
+    return price <= budget.max;
   }
 
   /**

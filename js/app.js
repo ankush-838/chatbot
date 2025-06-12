@@ -2,15 +2,15 @@
  * Application initialization and global functions
  */
 
-// Initialize the chatbot when DOM is loaded
+// Initialize the influencer negotiation bot when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  // Initialize the chatbot
-  window.chatbot = new AICustomerServiceBot();
+  // Initialize the influencer negotiation bot
+  window.chatbot = new InfluencerNegotiationBot();
 
   // Initialize send button state
   document.getElementById("sendButton").disabled = true;
 
-  console.log("AI Customer Service Chatbot initialized successfully");
+  console.log("Influencer Negotiation Bot initialized successfully");
 });
 
 /**
